@@ -32,7 +32,7 @@ export default function CustomersScreen() {
   }, [enriched, search]);
 
   return (
-    <div className="px-5 pt-5 pb-24 max-w-6xl mx-auto bg-[var(--bg)] relative">
+    <div className="px-5 pt-5 pb-24 w-full relative">
       {/* Header */}
       <div className="flex lg:hidden items-center justify-between mb-6">
         <div className="flex items-center gap-2">

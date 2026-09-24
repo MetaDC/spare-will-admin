@@ -13,17 +13,53 @@ import Sidebar from './components/Sidebar';
 import BottomTabBar from './components/BottomTabBar';
 import Toast from './components/Toast';
 
-import InventoryScreen from './screens/InventoryScreen';
+// Vehicle Masters
+import VehicleCategoriesScreen from './screens/catalog/VehicleCategoriesScreen';
+import VehicleBrandsScreen from './screens/catalog/VehicleBrandsScreen';
+import VehicleModelsScreen from './screens/catalog/VehicleModelsScreen';
+import VehicleVariantsScreen from './screens/catalog/VehicleVariantsScreen';
 
-export type AdminScreen = 'dashboard' | 'inquiries' | 'inquiry-detail' | 'inventory' | 'customers' | 'customer-detail' | 'settings';
+// Part Masters
+import PartCategoriesScreen from './screens/catalog/PartCategoriesScreen';
+import PartSubcategoriesScreen from './screens/catalog/PartSubcategoriesScreen';
+import PartBrandsScreen from './screens/catalog/PartBrandsScreen';
 
-interface ToastMsg { message: string; type: 'success' | 'error' | 'info'; }
+// Products & Inventory Catalog
+import ProductListScreen from './screens/inventory/ProductListScreen';
+import ProductFormScreen from './screens/inventory/ProductFormScreen';
+import ProductViewScreen from './screens/inventory/ProductViewScreen';
+
+export type AdminScreen =
+  | 'dashboard'
+  | 'inquiries'
+  | 'inquiry-detail'
+  | 'inventory'
+  | 'customers'
+  | 'customer-detail'
+  | 'settings'
+  | 'vehicle-categories'
+  | 'vehicle-brands'
+  | 'vehicle-models'
+  | 'vehicle-variants'
+  | 'part-categories'
+  | 'part-subcategories'
+  | 'part-brands'
+  | 'products'
+  | 'product-add'
+  | 'product-edit'
+  | 'product-view';
+
+interface ToastMsg {
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
 
 interface AdminContextType {
   currentUser: FirebaseUser | null;
   inquiries: Inquiry[];
   activeInquiryId: string | null;
   activeCustomerId: string | null;
+  activeProductId: string | null;
   currentScreen: AdminScreen;
   navigate: (screen: AdminScreen, id?: string) => void;
   goBack: () => void;
@@ -41,6 +77,7 @@ export default function App() {
   const [screenHistory, setScreenHistory] = useState<AdminScreen[]>([]);
   const [activeInquiryId, setActiveInquiryId] = useState<string | null>(null);
   const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null);
+  const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMsg | null>(null);
 
   useEffect(() => {
@@ -62,6 +99,9 @@ export default function App() {
     setCurrentScreen(screen);
     if (screen === 'inquiry-detail') setActiveInquiryId(id || null);
     if (screen === 'customer-detail') setActiveCustomerId(id || null);
+    if (screen === 'product-edit' || screen === 'product-view') setActiveProductId(id || null);
+    if (screen === 'product-add') setActiveProductId(null);
+
     // Scroll to top on navigation
     const mainContent = document.querySelector('main');
     if (mainContent) mainContent.scrollTo({ top: 0 });
@@ -107,47 +147,123 @@ export default function App() {
   const newCount = inquiries.filter(i => i.status === 'New').length;
 
   const ctxValue: AdminContextType = {
-    currentUser, inquiries, activeInquiryId, activeCustomerId,
-    currentScreen, navigate, goBack, showToast
+    currentUser,
+    inquiries,
+    activeInquiryId,
+    activeCustomerId,
+    activeProductId,
+    currentScreen,
+    navigate,
+    goBack,
+    showToast
   };
 
   const renderScreen = () => {
     switch (currentScreen) {
-      case 'dashboard': return <DashboardScreen />;
-      case 'inquiries': return <InquiriesScreen />;
-      case 'inquiry-detail': return <InquiryDetailScreen />;
-      case 'inventory': return <InventoryScreen />;
-      case 'customers': return <CustomersScreen />;
-      case 'customer-detail': return <CustomerDetailScreen />;
-      case 'settings': return <SettingsScreen />;
-      default: return <DashboardScreen />;
+      case 'dashboard':
+        return <DashboardScreen />;
+      case 'inquiries':
+        return <InquiriesScreen />;
+      case 'inquiry-detail':
+        return <InquiryDetailScreen />;
+      case 'customers':
+        return <CustomersScreen />;
+      case 'customer-detail':
+        return <CustomerDetailScreen />;
+      case 'settings':
+        return <SettingsScreen />;
+
+      // Vehicle Masters
+      case 'vehicle-categories':
+        return <VehicleCategoriesScreen />;
+      case 'vehicle-brands':
+        return <VehicleBrandsScreen />;
+      case 'vehicle-models':
+        return <VehicleModelsScreen />;
+      case 'vehicle-variants':
+        return <VehicleVariantsScreen />;
+
+      // Part Masters
+      case 'part-categories':
+        return <PartCategoriesScreen />;
+      case 'part-subcategories':
+        return <PartSubcategoriesScreen />;
+      case 'part-brands':
+        return <PartBrandsScreen />;
+
+      // Inventory & Product Catalog
+      case 'products':
+      case 'inventory':
+        return (
+          <ProductListScreen
+            onAddProduct={() => navigate('product-add')}
+            onEditProduct={(id) => navigate('product-edit', id)}
+            onViewProduct={(id) => navigate('product-view', id)}
+          />
+        );
+      case 'product-add':
+        return (
+          <ProductFormScreen
+            productId={null}
+            onCancel={() => navigate('products')}
+            onSaved={() => navigate('products')}
+          />
+        );
+      case 'product-edit':
+        return (
+          <ProductFormScreen
+            productId={activeProductId}
+            onCancel={() => navigate('products')}
+            onSaved={() => navigate('products')}
+          />
+        );
+      case 'product-view':
+        return activeProductId ? (
+          <ProductViewScreen
+            productId={activeProductId}
+            onBack={() => navigate('products')}
+            onEdit={(id) => navigate('product-edit', id)}
+          />
+        ) : (
+          <ProductListScreen
+            onAddProduct={() => navigate('product-add')}
+            onEditProduct={(id) => navigate('product-edit', id)}
+            onViewProduct={(id) => navigate('product-view', id)}
+          />
+        );
+
+      default:
+        return <DashboardScreen />;
     }
   };
 
   return (
     <AdminContext.Provider value={ctxValue}>
-      <div className="flex h-screen bg-[#f4f6f9] overflow-hidden">
+      <div className="flex h-screen min-h-screen w-full bg-[#f4f6f9] overflow-hidden">
         {/* Sidebar — desktop only */}
         <Sidebar
           currentScreen={currentScreen}
           navigate={navigate}
           sidebarOpen={false}
-          setSidebarOpen={() => { }}
+          setSidebarOpen={() => {}}
           newCount={newCount}
         />
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-
-          <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
-            <div className="animate-fade-in">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#f4f6f9]">
+          <main className="flex-1 overflow-y-auto pb-20 lg:pb-0 bg-[#f4f6f9]">
+            <div className="animate-fade-in min-h-full">
               {renderScreen()}
             </div>
           </main>
         </div>
 
         {/* Bottom tab bar — mobile only */}
-        <BottomTabBar currentScreen={currentScreen} navigate={navigate} newCount={newCount} />
+        <BottomTabBar
+          currentScreen={currentScreen}
+          navigate={navigate}
+          newCount={newCount}
+        />
 
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       </div>

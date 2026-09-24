@@ -50,7 +50,7 @@ export default function SettingsScreen() {
   const labelClass = "flex items-center gap-1.5 text-xs font-semibold text-[#64748b] uppercase tracking-wider mb-1.5";
 
   return (
-    <div className="px-5 pt-5 max-w-4xl mx-auto bg-[var(--bg)] relative">
+    <div className="px-5 pt-5 pb-24 w-full relative">
       {/* Header */}
       <div className="flex lg:hidden items-center justify-between mb-8">
         <div className="flex items-center gap-2">

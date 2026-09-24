@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDocs, getDoc, setDoc, updateDoc,
+  collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, writeBatch,
   onSnapshot, query, orderBy, where, serverTimestamp, Unsubscribe
 } from 'firebase/firestore';
 import {
@@ -74,67 +74,97 @@ export async function updateInquiryStatus(
   newStatus: InquiryStatus,
   currentHistory: StatusHistoryItem[]
 ): Promise<void> {
-  const docRef = doc(db, INQUIRIES_COL, inquiryId);
-  const now = new Date().toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true
-  });
+  try {
+    const docRef = doc(db, INQUIRIES_COL, inquiryId);
+    const now = new Date().toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: true
+    });
 
-  const updatedHistory = currentHistory.map(h => stripUndefined({
-    status: h.status,
-    label: h.label,
-    description: h.description,
-    active: h.status === newStatus,
-    completed: h.completed || (
-      ['New','Reviewing','Price Sent','Customer Contacted','Completed'].indexOf(h.status) <=
-      ['New','Reviewing','Price Sent','Customer Contacted','Completed'].indexOf(newStatus)
-    ),
-    date: (h.status === newStatus && !h.date) ? now : (h.date || null),
-  }));
+    const updatedHistory = currentHistory.map(h => stripUndefined({
+      status: h.status,
+      label: h.label,
+      description: h.description,
+      active: h.status === newStatus,
+      completed: h.completed || (
+        ['New','Reviewing','Price Sent','Customer Contacted','Completed'].indexOf(h.status) <=
+        ['New','Reviewing','Price Sent','Customer Contacted','Completed'].indexOf(newStatus)
+      ),
+      date: (h.status === newStatus && !h.date) ? now : (h.date || null),
+    }));
 
-  await updateDoc(docRef, {
-    status: newStatus,
-    statusHistory: updatedHistory,
-    updatedAt: serverTimestamp()
-  });
+    await updateDoc(docRef, {
+      status: newStatus,
+      statusHistory: updatedHistory,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error(`Failed to update inquiry status for ${inquiryId}:`, error);
+    throw new Error('Could not update inquiry status in database.');
+  }
 }
 
 export async function updateInquiryParts(inquiryId: string, parts: PartItem[]): Promise<void> {
-  const docRef = doc(db, INQUIRIES_COL, inquiryId);
-  const cleanParts = parts.map(p => stripUndefined(p as any));
-  await updateDoc(docRef, { parts: cleanParts, updatedAt: serverTimestamp() });
+  try {
+    const docRef = doc(db, INQUIRIES_COL, inquiryId);
+    const cleanParts = parts.map(p => stripUndefined(p as any));
+    await updateDoc(docRef, { parts: cleanParts, updatedAt: serverTimestamp() });
+  } catch (error) {
+    console.error(`Failed to update inquiry parts for ${inquiryId}:`, error);
+    throw new Error('Could not update inquiry parts in database.');
+  }
 }
 
 // ── Customers ────────────────────────────────────────────────────────────────
 
 export async function getAllCustomers(): Promise<UserProfile[]> {
-  const snap = await getDocs(collection(db, USERS_COL));
-  return snap.docs.map(d => d.data() as UserProfile);
+  try {
+    const snap = await getDocs(collection(db, USERS_COL));
+    return snap.docs.map(d => d.data() as UserProfile);
+  } catch (error) {
+    console.error('Failed to get customers:', error);
+    throw new Error('Could not fetch customers from database.');
+  }
 }
 
 export async function getCustomerInquiries(userId: string): Promise<Inquiry[]> {
-  const q = query(collection(db, INQUIRIES_COL), where('userId', '==', userId));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => d.data() as Inquiry).sort((a, b) => b.id > a.id ? 1 : -1);
+  try {
+    const q = query(collection(db, INQUIRIES_COL), where('userId', '==', userId));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data() as Inquiry).sort((a, b) => b.id > a.id ? 1 : -1);
+  } catch (error) {
+    console.error(`Failed to get inquiries for customer ${userId}:`, error);
+    throw new Error('Could not fetch customer inquiries from database.');
+  }
 }
 
 // ── Business Settings ─────────────────────────────────────────────────────────
 
 export async function getBusinessSettings(): Promise<BusinessSettings> {
-  const docRef = doc(db, SETTINGS_COL, BUSINESS_DOC);
-  const snap = await getDoc(docRef);
-  if (snap.exists()) return snap.data() as BusinessSettings;
-  return {
-    businessName: 'Spare Will',
-    businessEmail: '17shihab@gmail.com',
-    callingNumber: '+91 98765 43210',
-    whatsappNumber: '+91 98765 43210',
-    defaultGreeting: 'Hello {name},\nRegarding your Spare Will inquiry {id}:'
-  };
+  try {
+    const docRef = doc(db, SETTINGS_COL, BUSINESS_DOC);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) return snap.data() as BusinessSettings;
+    return {
+      businessName: 'Spare Will',
+      businessEmail: '17shihab@gmail.com',
+      callingNumber: '+91 98765 43210',
+      whatsappNumber: '+91 98765 43210',
+      defaultGreeting: 'Hello {name},\nRegarding your Spare Will inquiry {id}:'
+    };
+  } catch (error) {
+    console.error('Failed to get business settings:', error);
+    throw new Error('Could not fetch business settings from database.');
+  }
 }
 
 export async function saveBusinessSettings(settings: BusinessSettings): Promise<void> {
-  await setDoc(doc(db, SETTINGS_COL, BUSINESS_DOC), settings, { merge: true });
+  try {
+    await setDoc(doc(db, SETTINGS_COL, BUSINESS_DOC), settings, { merge: true });
+  } catch (error) {
+    console.error('Failed to save business settings:', error);
+    throw new Error('Could not save business settings in database.');
+  }
 }
 
 // ── Inventory ────────────────────────────────────────────────────────────────
@@ -156,37 +186,54 @@ export function subscribeToInventory(
 }
 
 export async function addSparePart(part: Omit<SparePart, 'id' | 'createdAt'>): Promise<void> {
-  const docRef = doc(collection(db, INVENTORY_COL));
-  await setDoc(docRef, {
-    ...part,
-    createdAt: serverTimestamp()
-  });
-}
-
-export async function updateSparePart(id: string, part: Partial<Omit<SparePart, 'id' | 'createdAt'>>): Promise<void> {
-  const docRef = doc(db, INVENTORY_COL, id);
-  await updateDoc(docRef, {
-    ...part,
-    updatedAt: serverTimestamp()
-  });
-}
-
-import { writeBatch } from 'firebase/firestore';
-
-export async function batchAddSpareParts(parts: Omit<SparePart, 'id' | 'createdAt'>[]): Promise<void> {
-  const batch = writeBatch(db);
-  parts.forEach(part => {
+  try {
     const docRef = doc(collection(db, INVENTORY_COL));
-    batch.set(docRef, {
+    await setDoc(docRef, {
       ...part,
       createdAt: serverTimestamp()
     });
-  });
-  await batch.commit();
+  } catch (error) {
+    console.error('Failed to add spare part:', error);
+    throw new Error('Could not add spare part to database.');
+  }
 }
 
-import { deleteDoc } from 'firebase/firestore';
+export async function updateSparePart(id: string, part: Partial<Omit<SparePart, 'id' | 'createdAt'>>): Promise<void> {
+  try {
+    const docRef = doc(db, INVENTORY_COL, id);
+    await updateDoc(docRef, {
+      ...part,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error(`Failed to update spare part ${id}:`, error);
+    throw new Error('Could not update spare part in database.');
+  }
+}
+
+export async function batchAddSpareParts(parts: Omit<SparePart, 'id' | 'createdAt'>[]): Promise<void> {
+  try {
+    const batch = writeBatch(db);
+    parts.forEach(part => {
+      const docRef = doc(collection(db, INVENTORY_COL));
+      batch.set(docRef, {
+        ...part,
+        createdAt: serverTimestamp()
+      });
+    });
+    await batch.commit();
+  } catch (error) {
+    console.error('Failed to batch add spare parts:', error);
+    throw new Error('Could not batch add spare parts to database.');
+  }
+}
 
 export async function deleteSparePart(id: string): Promise<void> {
-  await deleteDoc(doc(db, INVENTORY_COL, id));
+  try {
+    await deleteDoc(doc(db, INVENTORY_COL, id));
+  } catch (error) {
+    console.error(`Failed to delete spare part ${id}:`, error);
+    throw new Error('Could not delete spare part from database.');
+  }
 }
+

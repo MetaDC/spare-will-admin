@@ -37,7 +37,7 @@ export default function InquiriesScreen() {
   };
 
   return (
-    <div className="px-5 pt-5 pb-24 max-w-6xl mx-auto bg-[var(--bg)]">
+    <div className="px-5 pt-5 pb-24 w-full">
       {/* Header */}
       <div className="flex lg:hidden items-center justify-between mb-6">
         <div className="flex items-center gap-2">
