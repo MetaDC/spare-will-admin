@@ -1,24 +1,65 @@
-export type InquiryStatus = 'New' | 'Reviewing' | 'Price Sent' | 'Customer Contacted' | 'Completed' | 'Cancelled' | 'Closed';
+export type InquiryStatus = 'New' | 'Reviewing' | 'Price Sent' | 'Completed' | 'Cancelled';
+
+export type PartAvailability =
+  | 'Available'
+  | 'Not Available'
+  | 'Alternative Available'
+  | 'Need Confirmation';
+
+export interface InquiryPartBrandOption {
+  brandId?: string;
+  brandName: string;
+  price: number;
+  costPrice?: number;
+  availability?: PartAvailability;
+  warranty?: string;
+  partNumber?: string;
+  note?: string;
+}
+
+export type PartType = 'Aftermarket' | 'Genuine' | 'New' | 'OEM';
 
 export interface PartItem {
   id: string;
   name: string;
+  subcategoryId?: string;
+  categoryId?: string;
+  categoryName?: string;
   spec?: string;
   quantity: number;
+  customerNote?: string;
   note?: string;
-  // Admin fields
-  availability?: 'Available' | 'Not Available' | 'Alternative Available' | 'Need Confirmation';
+
+  // Admin quotation fields
+  availability?: PartAvailability;
+  partTypes?: string[];
+  partTypePrices?: Record<string, number>;
+  brandId?: string;
+  brandName?: string;
+  partNumber?: string;
   price?: number;
   costPrice?: number;
   adminNote?: string;
+  brandOptions?: InquiryPartBrandOption[];
 }
 
 export interface VehicleInfo {
+  vehicleCategoryId?: string;
+  vehicleCategoryName?: string;
+  brandId?: string;
+  brandName?: string;
   make: string;
+  modelId?: string;
+  modelName?: string;
   model: string;
-  year: number;
-  engineTrim: string;
+  variantId?: string;
+  variantName?: string;
+  fuelType?: string;
+  engine?: string;
+  engineCode?: string;
   transmission: string;
+  year?: number;
+  engineTrim?: string;
   vin?: string;
   image?: string;
 }
@@ -31,26 +72,25 @@ export interface ContactInfo {
 }
 
 export interface StatusHistoryItem {
-  status: InquiryStatus;
-  label: string;
+  createdAt: any;
   description: string;
-  date?: string;
-  completed: boolean;
-  active: boolean;
+  status: InquiryStatus;
+  createdByName: string;
+  createdById: string;
 }
 
 export interface Inquiry {
   id: string;
+  inquireId?: string;
+  InquireID?: string;
   userId?: string;
-  date: string;
   status: InquiryStatus;
   vehicle: VehicleInfo;
   parts: PartItem[];
   contact: ContactInfo;
   additionalNotes?: string;
   statusHistory: StatusHistoryItem[];
-  createdAt?: string;
-  serverTime?: unknown;
+  createdAt: any; // Firestore serverTimestamp
 }
 
 export interface UserProfile {
@@ -59,15 +99,36 @@ export interface UserProfile {
   email: string;
   phone: string;
   avatar: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface Setting {
+  id: string; // Document ID: "sets"
+  businessName: string;
+  businessEmail: string;
+  businessCallingNumber: string;
+  callingNumber?: string;
+  whatsappNumber: string;
+  defaultGreetingMsg: string;
+  defaultGreeting?: string;
+  inquiryCount?: number;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export interface BusinessSettings {
   businessName: string;
   businessEmail: string;
   callingNumber: string;
+  businessCallingNumber?: string;
   whatsappNumber: string;
   defaultGreeting: string;
+  defaultGreetingMsg?: string;
+  inquiryCount?: number;
 }
+
+
 
 export interface SparePart {
   id: string;

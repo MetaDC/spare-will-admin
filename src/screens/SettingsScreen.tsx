@@ -1,33 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Phone, MessageCircle, Building, Mail, AlignLeft, LogOut } from 'lucide-react';
+import {
+  Save,
+  Phone,
+  MessageCircle,
+  Building,
+  Mail,
+  LogOut,
+  CheckCircle2,
+} from 'lucide-react';
 import { useAdmin } from '../App';
-import { BusinessSettings } from '../types';
-import { getBusinessSettings, saveBusinessSettings } from '../services/adminService';
-import { adminSignOut } from '../services/adminService';
+import { Setting } from '../models';
+import {
+  getSetting,
+  saveSetting,
+  adminSignOut,
+  SETTING_DOC_ID,
+} from '../services/adminService';
 
 export default function SettingsScreen() {
-  const { currentUser, showToast } = useAdmin();
-  const [settings, setSettings] = useState<BusinessSettings>({
+  const { showToast } = useAdmin();
+  const [settings, setSettings] = useState<Setting>({
+    id: SETTING_DOC_ID,
     businessName: 'Spare Will',
     businessEmail: '',
-    callingNumber: '',
+    businessCallingNumber: '',
     whatsappNumber: '',
-    defaultGreeting: 'Hello {name},\nRegarding your Spare Will inquiry {id}:',
+    defaultGreetingMsg: 'Hello {name},\nRegarding your Spare Will inquiry {id}:',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
 
   useEffect(() => {
-    getBusinessSettings().then(s => { setSettings(s); setLoading(false); }).catch(() => setLoading(false));
+    getSetting()
+      .then((s) => {
+        setSettings({
+          id: s.id || SETTING_DOC_ID,
+          businessName: s.businessName || '',
+          businessEmail: s.businessEmail || '',
+          businessCallingNumber: s.businessCallingNumber || s.callingNumber || '',
+          whatsappNumber: s.whatsappNumber || '',
+          defaultGreetingMsg: s.defaultGreetingMsg || s.defaultGreeting || '',
+        });
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.warn('Failed to load settings:', err);
+        setLoading(false);
+      });
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setSaving(true);
+    setSavedSuccess(false);
     try {
-      await saveBusinessSettings(settings);
-      showToast('Settings saved!', 'success');
-    } catch (e: any) {
-      showToast(e.message || 'Failed to save', 'error');
+      await saveSetting({
+        ...settings,
+        id: SETTING_DOC_ID,
+      });
+      setSavedSuccess(true);
+      showToast('Settings saved successfully!', 'success');
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save settings', 'error');
     } finally {
       setSaving(false);
     }
@@ -38,116 +74,207 @@ export default function SettingsScreen() {
     showToast('Signed out', 'info');
   };
 
+  const insertVariable = (varName: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      defaultGreetingMsg: (prev.defaultGreetingMsg || '') + ` ${varName}`,
+    }));
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      <div className="flex flex-col items-center justify-center py-28 gap-3">
+        <div className="w-9 h-9 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs text-slate-500 font-medium tracking-wide">Loading settings...</p>
       </div>
     );
   }
 
-  const fieldClass = "w-full px-4 py-3 rounded-xl border border-[#cbd5e1] bg-[#f8fafc] text-[#181c1e] text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all";
-  const labelClass = "flex items-center gap-1.5 text-xs font-semibold text-[#64748b] uppercase tracking-wider mb-1.5";
-
   return (
-    <div className="px-5 pt-5 pb-24 w-full relative">
-      {/* Header */}
-      <div className="flex lg:hidden items-center justify-between mb-8">
-        <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Spare Will" className="h-6 w-auto" />
-          <span className="font-bold text-[var(--dark)] text-lg tracking-tight">Spare Will</span>
-        </div>
-      </div>
-      <div className="bg-white rounded-3xl border border-[var(--border)] shadow-sm p-5 md:p-6 mb-6">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-[17px] font-bold text-[var(--dark)]">Contact Settings</h2>
-          <button className="text-[var(--orange)] p-1 hover:bg-orange-50 rounded-full transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-          </button>
-        </div>
-        <p className="text-[12px] text-[#64748b] mb-6 leading-relaxed">
-          Update the primary contact information displayed to your customers.
+    <div className="px-4 md:px-8 pt-6 pb-28 max-w-4xl mx-auto w-full">
+      {/* Header bar */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Settings</h1>
+        <p className="text-xs md:text-sm text-slate-500 mt-1">
+          Manage your business profile, contact details, and messaging templates.
         </p>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-[11px] font-bold text-[var(--dark)] mb-1.5 ml-1">Business Name</label>
-            <input
-              value={settings.businessName}
-              onChange={e => setSettings(s => ({ ...s, businessName: e.target.value }))}
-              className="w-full px-4 py-3 bg-white border border-[var(--border)] rounded-2xl text-[13px] text-[var(--dark)] font-medium focus:outline-none focus:border-[var(--orange)] focus:ring-1 focus:ring-[var(--orange)] transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-[var(--dark)] mb-1.5 ml-1">Business Email</label>
-            <input
-              type="email"
-              value={settings.businessEmail}
-              onChange={e => setSettings(s => ({ ...s, businessEmail: e.target.value }))}
-              className="w-full px-4 py-3 bg-white border border-[var(--border)] rounded-2xl text-[13px] text-[var(--dark)] font-medium focus:outline-none focus:border-[var(--orange)] focus:ring-1 focus:ring-[var(--orange)] transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-[var(--dark)] mb-1.5 ml-1">Business Calling Number</label>
-            <div className="relative">
-              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]">
-                <Phone className="w-4 h-4" />
-              </div>
-              <input
-                value={settings.callingNumber}
-                onChange={e => setSettings(s => ({ ...s, callingNumber: e.target.value }))}
-                placeholder="+1 (555) 123-4567"
-                className="w-full pl-10 pr-4 py-3 bg-white border border-[var(--border)] rounded-2xl text-[13px] text-[var(--dark)] font-medium focus:outline-none focus:border-[var(--orange)] focus:ring-1 focus:ring-[var(--orange)] transition-colors"
-              />
-            </div>
-            <p className="text-[10px] text-[#94a3b8] mt-1.5 ml-1">Customers will use this to call your shop directly.</p>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-[var(--dark)] mb-1.5 ml-1">Business WhatsApp Number</label>
-            <div className="relative">
-              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]">
-                <MessageCircle className="w-4 h-4" />
-              </div>
-              <input
-                value={settings.whatsappNumber}
-                onChange={e => setSettings(s => ({ ...s, whatsappNumber: e.target.value }))}
-                placeholder="+1 (555) 987-6543"
-                className="w-full pl-10 pr-4 py-3 bg-white border border-[var(--border)] rounded-2xl text-[13px] text-[var(--dark)] font-medium focus:outline-none focus:border-[var(--orange)] focus:ring-1 focus:ring-[var(--orange)] transition-colors"
-              />
-            </div>
-            <p className="text-[10px] text-[#94a3b8] mt-1.5 ml-1">Used for messaging and quick updates.</p>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-[var(--dark)] mb-1.5 ml-1">Default Greeting Message</label>
-            <textarea
-              value={settings.defaultGreeting}
-              onChange={e => setSettings(s => ({ ...s, defaultGreeting: e.target.value }))}
-              rows={3}
-              className="w-full px-4 py-3 bg-white border border-[var(--border)] rounded-2xl text-[13px] text-[var(--dark)] font-medium focus:outline-none focus:border-[var(--orange)] focus:ring-1 focus:ring-[var(--orange)] transition-colors resize-none"
-            />
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full mt-4 bg-[var(--orange)] hover:bg-[#ea6c0a] text-white rounded-2xl py-3.5 font-bold text-[14px] flex items-center justify-center transition-colors shadow-md tap-scale disabled:opacity-70"
-          >
-            {saving ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Save Settings'}
-          </button>
-        </div>
       </div>
 
-      <div className="flex justify-center">
+      <form onSubmit={handleSave} className="space-y-6">
+        {/* Main Settings Card */}
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-5 md:p-8">
+          <div className="border-b border-slate-100 pb-4 mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Building className="w-4 h-4 text-orange-500" />
+                Business &amp; Contact Details
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Update the contact and messaging information used across the platform.
+              </p>
+            </div>
+            {savedSuccess && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 animate-fade-in">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Saved
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Business Name */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Business Name <span className="text-orange-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Building className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={settings.businessName}
+                  onChange={(e) => setSettings((s) => ({ ...s, businessName: e.target.value }))}
+                  placeholder="Spare Will"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all shadow-xs"
+                />
+              </div>
+            </div>
+
+            {/* Business Email */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Business Email <span className="text-orange-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  required
+                  value={settings.businessEmail}
+                  onChange={(e) => setSettings((s) => ({ ...s, businessEmail: e.target.value }))}
+                  placeholder="contact@sparewill.com"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all shadow-xs"
+                />
+              </div>
+            </div>
+
+            {/* Business Calling Number */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Business Calling Number <span className="text-orange-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <input
+                  type="tel"
+                  required
+                  value={settings.businessCallingNumber}
+                  onChange={(e) => setSettings((s) => ({ ...s, businessCallingNumber: e.target.value, callingNumber: e.target.value }))}
+                  placeholder="+91 98765 43210"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all shadow-xs"
+                />
+              </div>
+            </div>
+
+            {/* WhatsApp Number */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Business WhatsApp Number <span className="text-orange-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-500">
+                  <MessageCircle className="w-4 h-4" />
+                </div>
+                <input
+                  type="tel"
+                  required
+                  value={settings.whatsappNumber}
+                  onChange={(e) => setSettings((s) => ({ ...s, whatsappNumber: e.target.value }))}
+                  placeholder="+91 98765 43210"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all shadow-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Default Greeting Message Section */}
+          <div className="mt-6 pt-6 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Default Greeting Message <span className="text-orange-500">*</span>
+              </label>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-slate-400">Insert variables:</span>
+                <button
+                  type="button"
+                  onClick={() => insertVariable('{name}')}
+                  className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-mono font-medium transition-colors cursor-pointer"
+                >
+                  {'{name}'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertVariable('{id}')}
+                  className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-mono font-medium transition-colors cursor-pointer"
+                >
+                  {'{id}'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertVariable('{vehicle}')}
+                  className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-mono font-medium transition-colors cursor-pointer"
+                >
+                  {'{vehicle}'}
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              rows={4}
+              required
+              value={settings.defaultGreetingMsg}
+              onChange={(e) => setSettings((s) => ({ ...s, defaultGreetingMsg: e.target.value, defaultGreeting: e.target.value }))}
+              placeholder="Hello {name},\nRegarding your inquiry {id}:"
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all font-mono leading-relaxed"
+            />
+          </div>
+
+          {/* Action Button */}
+          <div className="mt-8 flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full sm:w-auto px-8 py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 transition-all disabled:opacity-70 cursor-pointer"
+            >
+              {saving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Save Settings</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {/* Sign Out Section */}
+      <div className="mt-8 flex justify-center">
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-2 px-6 py-3 rounded-full border border-red-200 text-red-600 bg-white hover:bg-red-50 font-bold text-[13px] transition-colors tap-scale shadow-sm"
+          className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-red-200 text-red-600 bg-white hover:bg-red-50 font-semibold text-xs transition-colors shadow-xs cursor-pointer"
         >
-          <LogOut className="w-4 h-4" />
-          Sign Out
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Sign Out</span>
         </button>
       </div>
     </div>

@@ -237,7 +237,6 @@ export default function VehicleCategoriesScreen() {
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50/75 border-b border-gray-100 text-gray-500 text-xs uppercase font-medium">
                 <tr>
-                  <th className="py-3.5 px-4 w-16">Sort</th>
                   <th className="py-3.5 px-4">Category Name</th>
                   <th className="py-3.5 px-4">Slug</th>
                   <th className="py-3.5 px-4">Status</th>
@@ -250,20 +249,13 @@ export default function VehicleCategoriesScreen() {
                     key={cat.id}
                     className="hover:bg-gray-50/60 transition-colors"
                   >
-                    <td className="py-3.5 px-4 font-mono text-xs text-gray-400">
-                      {cat.sortOrder || 0}
-                    </td>
                     <td className="py-3.5 px-4 font-semibold text-gray-900 flex items-center gap-3">
-                      {cat.image ? (
+                      {cat.image && (
                         <img
                           src={cat.image}
                           alt={cat.name}
-                          className="w-8 h-8 rounded-lg object-cover bg-gray-100 border border-gray-200"
+                          className="w-8 h-8 rounded-lg object-cover bg-gray-100 border border-gray-200 shrink-0"
                         />
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 font-bold flex items-center justify-center text-xs">
-                          {cat.name.charAt(0)}
-                        </div>
                       )}
                       <span>{cat.name}</span>
                     </td>
@@ -370,41 +362,23 @@ export default function VehicleCategoriesScreen() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Sort Order
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.sortOrder}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          sortOrder: Number(e.target.value),
-                        })
-                      }
-                      className="w-full px-3.5 py-2 text-sm bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Status
-                    </label>
-                    <select
-                      value={formData.isActive ? "true" : "false"}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          isActive: e.target.value === "true",
-                        })
-                      }
-                      className="w-full px-3.5 py-2 text-sm bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                    >
-                      <option value="true">Active</option>
-                      <option value="false">Inactive</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={formData.isActive ? "true" : "false"}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        isActive: e.target.value === "true",
+                      })
+                    }
+                    className="w-full px-3.5 py-2 text-sm bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  >
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
                 </div>
 
                 <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2.5">

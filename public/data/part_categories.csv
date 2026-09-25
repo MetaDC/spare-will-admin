@@ -1,0 +1,18 @@
+id,name,slug,searchName,description,sortOrder,isActive
+qUJcuxIEjZpESNVV9ORM,Braking System,braking-system,brakingsystem,"Disc brakes, drum brakes, hydraulic components, ABS sensors & booster units",1,true
+LvMYWuo46T5aqoitafk8,Engine & Engine Components,engine-engine-components,engineenginecomponents,"Engine block, cylinder head, pistons, crankshaft, valvetrain, timing & gaskets",2,true
+kVI5sumNRE5rbGo0QTFJ,Filters & Maintenance,filters-maintenance,filtersmaintenance,"Oil filters, air filters, fuel filters, cabin AC filters & transmission filters",3,true
+VhGB7qulH6pyXncgg063,Clutch & Transmission,clutch-transmission,clutchtransmission,"Clutch kits, flywheels, cylinders, manual & auto transmission components, CV axles",4,true
+PpqM7pX6VjfciZbFh9X6,Suspension & Arms,suspension-arms,suspensionarms,"Shock absorbers, struts, coil springs, lower control arms, bushes & ball joints",5,true
+sAx2cVnxekOns9CR1TXr,Steering System,steering-system,steeringsystem,"Steering rack & pinion, tie rod ends, EPS motor columns & power steering pumps",6,true
+0P4B0ID1IbQxBPxhNKHJ,Cooling System,cooling-system,coolingsystem,"Radiators, water pumps, thermostats, cooling fans, hoses & expansion reservoirs",7,true
+rmdsd4ocQZG3FnIkUh3Q,Air Conditioning & Climate,air-conditioning-climate,airconditioningclimate,"AC compressors, condensers, evaporators, heater cores, blower motors & pipes",8,true
+Syi1kl1VnI3lCnSksKrB,Fuel Supply System,fuel-supply-system,fuelsupplysystem,"Electric fuel pumps, injectors, common rail, throttle bodies & fuel regulators",9,true
+WMbSFQKbhwLqgyuX5WbK,"Electrical, Battery & Ignition",electrical-battery-ignition,electricalbatteryignition,"Starter motors, alternators, batteries, spark plugs, ignition coils, horns & wiring",10,true
+UQs7279mKaFlN9jsmFXq,"Sensors, Relays & ECUs",sensors-relays-ecus,sensorsrelaysecus,"Oxygen, MAF, MAP, Crank, Cam, ABS sensors, engine control units & body modules",11,true
+7As44xhH9gGEL0fp8gU5,Exhaust & Emission System,exhaust-emission-system,exhaustemissionsystem,"Catalytic converters, exhaust manifolds, silencers, DPF units & EGR valves",12,true
+0NW4wvLi2kFkapAyNeK5,Lighting & Lamps,lighting-lamps,lightinglamps,"Headlight assemblies, tail lights, fog lights, indicators, LED & halogen bulbs",13,true
+HGWax20l1VUoxsG3XHu0,Body Parts & Panels,body-parts-panels,bodypartspanels,"Bumpers, bonnets, fenders, doors, boot lids, side mirrors, glass & grilles",14,true
+luUd7KKRSthUqbMgSMaB,Interior & Cabin Comfort,interior-cabin-comfort,interiorcabincomfort,"Power window switches, air vents, door handles, sun visors, mirrors & seat belts",15,true
+bV81uRhAS9TYqbCF7YPb,"Wheels, Tyres & Hubs",wheels-tyres-hubs,wheelstyreshubs,"Wheel hub assemblies, bearings, steel rims, alloy wheels, passenger tyres & nuts",16,true
+iTqZqKnHVcF6034kqPhF,"Fluids, Oils & Consumables",fluids-oils-consumables,fluidsoilsconsumables,"Synthetic engine oils, brake fluids, coolants, gear oils & specialized lubricants",17,true

@@ -367,16 +367,12 @@ export default function VehicleModelsScreen() {
                     className="hover:bg-gray-50/60 transition-colors"
                   >
                     <td className="py-3.5 px-4 font-semibold text-gray-900 flex items-center gap-3">
-                      {m.image ? (
+                      {m.image && (
                         <img
                           src={m.image}
                           alt={m.name}
-                          className="w-8 h-8 rounded-lg object-cover bg-gray-50 border border-gray-200"
+                          className="w-8 h-8 rounded-lg object-cover bg-gray-50 border border-gray-200 shrink-0"
                         />
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 font-bold flex items-center justify-center text-xs">
-                          {m.name.charAt(0)}
-                        </div>
                       )}
                       <span>{m.name}</span>
                     </td>

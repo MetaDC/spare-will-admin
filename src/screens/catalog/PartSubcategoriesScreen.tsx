@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   Plus,
@@ -13,19 +13,29 @@ import { useAdmin } from "../../App";
 import { PartCategory, PartSubcategory } from "../../models";
 import {
   getPartCategories,
-  getPartSubcategories,
+  getPaginatedPartSubcategories,
   savePartSubcategory,
   deletePartSubcategory,
 } from "../../services/catalogService";
+import { DocumentSnapshot } from "firebase/firestore";
 
 export default function PartSubcategoriesScreen() {
   const { showToast } = useAdmin();
   const [partCategories, setPartCategories] = useState<PartCategory[]>([]);
   const [subCategories, setSubCategories] = useState<PartSubcategory[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Search & Filter
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] =
     useState<string>("all");
+
+  // Pagination state (10 per page, cursor-based)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [firstDoc, setFirstDoc] = useState<DocumentSnapshot | null>(null);
+  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
 
   // Modal
   const [showModal, setShowModal] = useState(false);
@@ -44,25 +54,79 @@ export default function PartSubcategoriesScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  // Debounce search input by 350ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Load categories once for dropdowns
+  useEffect(() => {
+    getPartCategories()
+      .then(setPartCategories)
+      .catch((err) => console.error("Failed to load part categories:", err));
+  }, []);
+
+  // Fetch paginated subcategories from Firestore
+  const fetchPage = async (
+    direction: "first" | "next" | "prev" = "first",
+    targetPage = 1,
+    cursorOverride?: DocumentSnapshot | null
+  ) => {
     try {
       setLoading(true);
-      const [cats, subs] = await Promise.all([
-        getPartCategories(),
-        getPartSubcategories(),
-      ]);
-      setPartCategories(cats);
-      setSubCategories(subs);
+      let cursor = cursorOverride;
+      if (cursor === undefined) {
+        if (direction === "next") cursor = lastDoc;
+        else if (direction === "prev") cursor = firstDoc;
+        else cursor = null;
+      }
+
+      const res = await getPaginatedPartSubcategories({
+        categoryId: selectedCategoryFilter,
+        search: debouncedSearch,
+        pageSize: 10,
+        cursorDoc: cursor,
+        direction,
+      });
+
+      setSubCategories(res.items);
+      setTotalCount(res.totalCount);
+      setFirstDoc(res.firstDoc);
+      setLastDoc(res.lastDoc);
+      setCurrentPage(targetPage);
     } catch (err: any) {
-      showToast(err.message || "Failed to load part data", "error");
+      showToast(err.message || "Failed to load part subcategories", "error");
     } finally {
       setLoading(false);
     }
   };
 
+  // Re-fetch from page 1 whenever category filter or debounced search changes
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchPage("first", 1, null);
+  }, [selectedCategoryFilter, debouncedSearch]);
+
+  const totalPages = Math.ceil(totalCount / 10) || 1;
+
+  // Pagination navigation rules:
+  // From page N, only go to N-1 (Prev), N+1 (Next), or 1 (Reset)
+  const handleFirstPage = () => {
+    if (currentPage === 1 || loading) return;
+    fetchPage("first", 1, null);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage <= 1 || loading || !firstDoc) return;
+    fetchPage("prev", currentPage - 1, firstDoc);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage >= totalPages || loading || !lastDoc) return;
+    fetchPage("next", currentPage + 1, lastDoc);
+  };
 
   const handleOpenAdd = () => {
     setEditingSubCat(null);
@@ -78,7 +142,7 @@ export default function PartSubcategoriesScreen() {
       image: "",
       description: "",
       isActive: true,
-      sortOrder: subCategories.length + 1,
+      sortOrder: totalCount + 1,
     });
     setShowModal(true);
   };
@@ -141,7 +205,7 @@ export default function PartSubcategoriesScreen() {
         "success",
       );
       setShowModal(false);
-      fetchData();
+      fetchPage("first", 1, null);
     } catch (err: any) {
       showToast(err.message || "Error saving subcategory", "error");
     } finally {
@@ -155,31 +219,11 @@ export default function PartSubcategoriesScreen() {
       await deletePartSubcategory(deletingId);
       showToast("Part subcategory deleted", "info");
       setDeletingId(null);
-      fetchData();
+      fetchPage("first", 1, null);
     } catch (err: any) {
       showToast(err.message || "Failed to delete subcategory", "error");
     }
   };
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return subCategories.filter((sc) => {
-      const catName =
-        sc.categoryName ||
-        partCategories.find((c) => c.id === sc.categoryId)?.name ||
-        "";
-      const matchSearch =
-        !q ||
-        sc.name.toLowerCase().includes(q) ||
-        sc.slug.toLowerCase().includes(q) ||
-        catName.toLowerCase().includes(q);
-
-      if (selectedCategoryFilter !== "all") {
-        return matchSearch && sc.categoryId === selectedCategoryFilter;
-      }
-      return matchSearch;
-    });
-  }, [subCategories, partCategories, search, selectedCategoryFilter]);
 
   return (
     <div className="p-6 space-y-6 w-full">
@@ -244,7 +288,7 @@ export default function PartSubcategoriesScreen() {
         </div>
 
         <div className="text-xs font-medium text-gray-500 shrink-0">
-          Showing {filtered.length} of {subCategories.length} subcategories
+          Showing {subCategories.length} of {totalCount} subcategories
         </div>
       </div>
 
@@ -255,7 +299,7 @@ export default function PartSubcategoriesScreen() {
             <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mb-3" />
             <p className="text-sm">Loading part subcategories...</p>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : subCategories.length === 0 ? (
           <div className="py-20 text-center text-gray-400">
             <GitBranch className="w-12 h-12 mx-auto mb-3 opacity-30 text-gray-500" />
             <h3 className="text-base font-semibold text-gray-700">
@@ -279,7 +323,6 @@ export default function PartSubcategoriesScreen() {
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50/75 border-b border-gray-100 text-gray-500 text-xs uppercase font-medium">
                 <tr>
-                  <th className="py-3.5 px-4 w-16">Sort</th>
                   <th className="py-3.5 px-4">Subcategory Name</th>
                   <th className="py-3.5 px-4">Part Category</th>
                   <th className="py-3.5 px-4">Slug</th>
@@ -288,7 +331,7 @@ export default function PartSubcategoriesScreen() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((subCat) => {
+                {subCategories.map((subCat) => {
                   const catName =
                     subCat.categoryName ||
                     partCategories.find((c) => c.id === subCat.categoryId)
@@ -299,9 +342,6 @@ export default function PartSubcategoriesScreen() {
                       key={subCat.id}
                       className="hover:bg-gray-50/50 transition-colors group"
                     >
-                      <td className="py-3.5 px-4 text-xs font-semibold text-gray-400">
-                        {subCat.sortOrder || 0}
-                      </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2">
                           <span className="text-gray-400 font-mono text-xs">
@@ -362,6 +402,74 @@ export default function PartSubcategoriesScreen() {
                 })}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-gray-500 font-medium">
+                Showing{" "}
+                <span className="font-semibold text-gray-800">
+                  {totalCount === 0 ? 0 : (currentPage - 1) * 10 + 1}
+                </span>{" "}
+                to{" "}
+                <span className="font-semibold text-gray-800">
+                  {Math.min(currentPage * 10, totalCount)}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-gray-800">
+                  {totalCount}
+                </span>{" "}
+                subcategories
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Reset / Direct Jump to Page 1 */}
+                <button
+                  onClick={handleFirstPage}
+                  disabled={currentPage === 1 || loading}
+                  title="Direct Jump to Page 1"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    currentPage === 1 || loading
+                      ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                      : "bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-600 border-gray-200 hover:border-orange-200 shadow-xs cursor-pointer"
+                  }`}
+                >
+                  « Page 1
+                </button>
+
+                {/* Previous Page (from first document) */}
+                <button
+                  onClick={handlePrevPage}
+                  disabled={currentPage <= 1 || loading || !firstDoc}
+                  title="Previous Page (loads previous 10)"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    currentPage <= 1 || loading || !firstDoc
+                      ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                      : "bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-600 border-gray-200 hover:border-orange-200 shadow-xs cursor-pointer"
+                  }`}
+                >
+                  ‹ Prev
+                </button>
+
+                {/* Current Page Badge */}
+                <div className="px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg shadow-xs select-none">
+                  Page {currentPage} of {totalPages}
+                </div>
+
+                {/* Next Page (from last document) */}
+                <button
+                  onClick={handleNextPage}
+                  disabled={currentPage >= totalPages || loading || !lastDoc}
+                  title="Next Page (loads next 10)"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    currentPage >= totalPages || loading || !lastDoc
+                      ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                      : "bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-600 border-gray-200 hover:border-orange-200 shadow-xs cursor-pointer"
+                  }`}
+                >
+                  Next ›
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -473,41 +581,23 @@ export default function PartSubcategoriesScreen() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Sort Order
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.sortOrder}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          sortOrder: Number(e.target.value),
-                        })
-                      }
-                      className="w-full px-3.5 py-2 text-sm bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Status
-                    </label>
-                    <select
-                      value={formData.isActive ? "true" : "false"}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          isActive: e.target.value === "true",
-                        })
-                      }
-                      className="w-full px-3.5 py-2 text-sm bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                    >
-                      <option value="true">Active</option>
-                      <option value="false">Inactive</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={formData.isActive ? "true" : "false"}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        isActive: e.target.value === "true",
+                      })
+                    }
+                    className="w-full px-3.5 py-2 text-sm bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  >
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
                 </div>
 
                 <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2.5">

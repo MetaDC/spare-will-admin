@@ -1,7 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
-import { subscribeToAuth, subscribeToAllInquiries, isAdminEmail } from './services/adminService';
-import { Inquiry } from './types';
+import { subscribeToAuth, subscribeToNewInquiriesCount, subscribeToSetting, isAdminEmail } from './services/adminService';
+import { Inquiry, Setting } from './types';
 import LoginScreen from './screens/LoginScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import InquiriesScreen from './screens/InquiriesScreen';
@@ -57,6 +57,8 @@ interface ToastMsg {
 interface AdminContextType {
   currentUser: FirebaseUser | null;
   inquiries: Inquiry[];
+  newCount: number;
+  setting: Setting | null;
   activeInquiryId: string | null;
   activeCustomerId: string | null;
   activeProductId: string | null;
@@ -73,6 +75,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [newCount, setNewCount] = useState<number>(0);
+  const [setting, setSetting] = useState<Setting | null>(null);
   const [currentScreen, setCurrentScreen] = useState<AdminScreen>('dashboard');
   const [screenHistory, setScreenHistory] = useState<AdminScreen[]>([]);
   const [activeInquiryId, setActiveInquiryId] = useState<string | null>(null);
@@ -90,8 +94,13 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
-    const unsub = subscribeToAllInquiries(setInquiries, console.warn);
-    return () => unsub();
+    // Count query for "New" inquiries used in sidebar and tab bar
+    const unsubCount = subscribeToNewInquiriesCount(setNewCount, console.warn);
+    const unsubSetting = subscribeToSetting(setSetting, console.warn);
+    return () => {
+      unsubCount();
+      unsubSetting();
+    };
   }, [currentUser]);
 
   const navigate = (screen: AdminScreen, id?: string) => {
@@ -144,11 +153,11 @@ export default function App() {
     );
   }
 
-  const newCount = inquiries.filter(i => i.status === 'New').length;
-
   const ctxValue: AdminContextType = {
     currentUser,
     inquiries,
+    newCount,
+    setting,
     activeInquiryId,
     activeCustomerId,
     activeProductId,

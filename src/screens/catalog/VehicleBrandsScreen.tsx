@@ -308,16 +308,12 @@ export default function VehicleBrandsScreen() {
                     className="hover:bg-gray-50/60 transition-colors"
                   >
                     <td className="py-3.5 px-4 font-semibold text-gray-900 flex items-center gap-3">
-                      {b.logo ? (
+                      {b.logo && (
                         <img
                           src={b.logo}
                           alt={b.name}
-                          className="w-8 h-8 rounded-lg object-contain bg-gray-50 border border-gray-200 p-1"
+                          className="w-8 h-8 rounded-lg object-contain bg-gray-50 border border-gray-200 p-1 shrink-0"
                         />
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 font-bold flex items-center justify-center text-xs">
-                          {b.name.charAt(0)}
-                        </div>
                       )}
                       <span>{b.name}</span>
                     </td>

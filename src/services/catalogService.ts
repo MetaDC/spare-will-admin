@@ -765,6 +765,218 @@ export async function deletePartBrand(id: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PAGINATED PART MASTERS (10 per page, server-side count & search)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getPaginatedPartCategories(options: {
+  search?: string;
+  pageSize?: number;
+  cursorDoc?: DocumentSnapshot | null;
+  direction?: "first" | "next" | "prev";
+}): Promise<PaginatedResult<PartCategory>> {
+  try {
+    const pageSize = options.pageSize || 10;
+    const cleanSearch = (options.search || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "");
+
+    const baseConstraints: QueryConstraint[] = [];
+
+    if (cleanSearch) {
+      baseConstraints.push(where("searchName", ">=", cleanSearch));
+      baseConstraints.push(where("searchName", "<=", cleanSearch + "\uf8ff"));
+      baseConstraints.push(orderBy("searchName", "asc"));
+    } else {
+      baseConstraints.push(orderBy("name", "asc"));
+    }
+
+    // Aggregation Count Query
+    const countConstraints: QueryConstraint[] = [];
+    if (cleanSearch) {
+      countConstraints.push(where("searchName", ">=", cleanSearch));
+      countConstraints.push(where("searchName", "<=", cleanSearch + "\uf8ff"));
+    }
+    const countQ = query(
+      collection(db, COLS.PART_CATEGORIES),
+      ...countConstraints,
+    );
+    const countSnap = await getCountFromServer(countQ);
+    const totalCount = countSnap.data().count;
+
+    // Data Query
+    const dataConstraints: QueryConstraint[] = [...baseConstraints];
+    if (options.direction === "next" && options.cursorDoc) {
+      dataConstraints.push(startAfter(options.cursorDoc), limit(pageSize));
+    } else if (options.direction === "prev" && options.cursorDoc) {
+      dataConstraints.push(endBefore(options.cursorDoc), limitToLast(pageSize));
+    } else {
+      dataConstraints.push(limit(pageSize));
+    }
+
+    const dataQ = query(
+      collection(db, COLS.PART_CATEGORIES),
+      ...dataConstraints,
+    );
+    const snap = await getDocs(dataQ);
+    const items = snap.docs.map(
+      (d) => ({ ...d.data(), id: d.id }) as PartCategory,
+    );
+
+    return {
+      items,
+      totalCount,
+      firstDoc: snap.docs[0] || null,
+      lastDoc: snap.docs[snap.docs.length - 1] || null,
+    };
+  } catch (error) {
+    console.error("Failed to get paginated part categories:", error);
+    throw new Error("Could not fetch part categories from database.");
+  }
+}
+
+export async function getPaginatedPartSubcategories(options: {
+  categoryId?: string;
+  search?: string;
+  pageSize?: number;
+  cursorDoc?: DocumentSnapshot | null;
+  direction?: "first" | "next" | "prev";
+}): Promise<PaginatedResult<PartSubcategory>> {
+  try {
+    const pageSize = options.pageSize || 10;
+    const cleanSearch = (options.search || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "");
+
+    const baseConstraints: QueryConstraint[] = [];
+    if (options.categoryId && options.categoryId !== "all") {
+      baseConstraints.push(where("categoryId", "==", options.categoryId));
+    }
+
+    if (cleanSearch) {
+      baseConstraints.push(where("searchName", ">=", cleanSearch));
+      baseConstraints.push(where("searchName", "<=", cleanSearch + "\uf8ff"));
+      baseConstraints.push(orderBy("searchName", "asc"));
+    } else {
+      baseConstraints.push(orderBy("name", "asc"));
+    }
+
+    // Aggregation Count Query
+    const countConstraints: QueryConstraint[] = [];
+    if (options.categoryId && options.categoryId !== "all") {
+      countConstraints.push(where("categoryId", "==", options.categoryId));
+    }
+    if (cleanSearch) {
+      countConstraints.push(where("searchName", ">=", cleanSearch));
+      countConstraints.push(where("searchName", "<=", cleanSearch + "\uf8ff"));
+    }
+    const countQ = query(
+      collection(db, COLS.PART_SUBCATEGORIES),
+      ...countConstraints,
+    );
+    const countSnap = await getCountFromServer(countQ);
+    const totalCount = countSnap.data().count;
+
+    // Data Query
+    const dataConstraints: QueryConstraint[] = [...baseConstraints];
+    if (options.direction === "next" && options.cursorDoc) {
+      dataConstraints.push(startAfter(options.cursorDoc), limit(pageSize));
+    } else if (options.direction === "prev" && options.cursorDoc) {
+      dataConstraints.push(endBefore(options.cursorDoc), limitToLast(pageSize));
+    } else {
+      dataConstraints.push(limit(pageSize));
+    }
+
+    const dataQ = query(
+      collection(db, COLS.PART_SUBCATEGORIES),
+      ...dataConstraints,
+    );
+    const snap = await getDocs(dataQ);
+    const items = snap.docs.map(
+      (d) => ({ ...d.data(), id: d.id }) as PartSubcategory,
+    );
+
+    return {
+      items,
+      totalCount,
+      firstDoc: snap.docs[0] || null,
+      lastDoc: snap.docs[snap.docs.length - 1] || null,
+    };
+  } catch (error) {
+    console.error("Failed to get paginated part subcategories:", error);
+    throw new Error("Could not fetch part subcategories from database.");
+  }
+}
+
+export async function getPaginatedPartBrands(options: {
+  search?: string;
+  pageSize?: number;
+  cursorDoc?: DocumentSnapshot | null;
+  direction?: "first" | "next" | "prev";
+}): Promise<PaginatedResult<PartBrand>> {
+  try {
+    const pageSize = options.pageSize || 10;
+    const cleanSearch = (options.search || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "");
+
+    const baseConstraints: QueryConstraint[] = [];
+
+    if (cleanSearch) {
+      baseConstraints.push(where("searchName", ">=", cleanSearch));
+      baseConstraints.push(where("searchName", "<=", cleanSearch + "\uf8ff"));
+      baseConstraints.push(orderBy("searchName", "asc"));
+    } else {
+      baseConstraints.push(orderBy("name", "asc"));
+    }
+
+    // Aggregation Count Query
+    const countConstraints: QueryConstraint[] = [];
+    if (cleanSearch) {
+      countConstraints.push(where("searchName", ">=", cleanSearch));
+      countConstraints.push(where("searchName", "<=", cleanSearch + "\uf8ff"));
+    }
+    const countQ = query(
+      collection(db, COLS.PART_BRANDS),
+      ...countConstraints,
+    );
+    const countSnap = await getCountFromServer(countQ);
+    const totalCount = countSnap.data().count;
+
+    // Data Query
+    const dataConstraints: QueryConstraint[] = [...baseConstraints];
+    if (options.direction === "next" && options.cursorDoc) {
+      dataConstraints.push(startAfter(options.cursorDoc), limit(pageSize));
+    } else if (options.direction === "prev" && options.cursorDoc) {
+      dataConstraints.push(endBefore(options.cursorDoc), limitToLast(pageSize));
+    } else {
+      dataConstraints.push(limit(pageSize));
+    }
+
+    const dataQ = query(
+      collection(db, COLS.PART_BRANDS),
+      ...dataConstraints,
+    );
+    const snap = await getDocs(dataQ);
+    const items = snap.docs.map(
+      (d) => ({ ...d.data(), id: d.id }) as PartBrand,
+    );
+
+    return {
+      items,
+      totalCount,
+      firstDoc: snap.docs[0] || null,
+      lastDoc: snap.docs[snap.docs.length - 1] || null,
+    };
+  } catch (error) {
+    console.error("Failed to get paginated part brands:", error);
+    throw new Error("Could not fetch part brands from database.");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PRODUCTS & RELATIONS
 // ─────────────────────────────────────────────────────────────────────────────
 

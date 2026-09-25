@@ -1,121 +1,417 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MessageCircle, Phone, ChevronRight, Users } from 'lucide-react';
-import { useAdmin } from '../App';
-import { UserProfile } from '../types';
-import { getAllCustomers } from '../services/adminService';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Search,
+  Users,
+  Mail,
+  Phone,
+  Calendar,
+  MessageCircle,
+  ChevronRight,
+  X,
+  RotateCw,
+} from "lucide-react";
+import { QueryDocumentSnapshot } from "firebase/firestore";
+import { useAdmin } from "../App";
+import { UserProfile } from "../types";
+import {
+  fetchCustomersPaginated,
+  searchCustomersInDb,
+  formatInquiryDate,
+} from "../services/adminService";
 
 export default function CustomersScreen() {
-  const { inquiries, navigate } = useAdmin();
+  const { navigate } = useAdmin();
   const [customers, setCustomers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
 
+  // Cursors map to allow direct Firestore pagination with limit(10)
+  // Page 1 starts with null cursor
+  const cursorsMap = useRef<Record<number, QueryDocumentSnapshot | null>>({
+    1: null,
+  });
+
+  // Debounce search input to avoid redundant database reads
   useEffect(() => {
-    getAllCustomers().then(c => { setCustomers(c); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [search]);
 
-  const enriched = useMemo(() => {
-    return customers.map(c => ({
-      ...c,
-      inquiryCount: inquiries.filter(i => i.userId === c.id).length,
-    }));
-  }, [customers, inquiries]);
+  // Main loader from Firestore database
+  const loadData = useCallback(
+    async (pageToLoad: number, activeSearch: string) => {
+      setLoading(true);
+      try {
+        if (activeSearch) {
+          // Direct database search across fields
+          const result = await searchCustomersInDb(activeSearch, pageSize);
+          setCustomers(result.customers);
+          setTotalCount(result.totalCount);
+        } else {
+          // Direct database pagination with limit(10)
+          const cursor = cursorsMap.current[pageToLoad] ?? null;
+          const result = await fetchCustomersPaginated({
+            pageSize,
+            cursor,
+          });
 
-  const filtered = useMemo(() => {
-    if (!search) return enriched;
-    const q = search.toLowerCase();
-    return enriched.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q) ||
-      c.phone.includes(q)
-    );
-  }, [enriched, search]);
+          setCustomers(result.customers);
+          setTotalCount(result.totalCount);
+
+          // Save next page cursor if available
+          if (result.lastDoc) {
+            cursorsMap.current[pageToLoad + 1] = result.lastDoc;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load customers from database:", err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pageSize]
+  );
+
+  // Trigger data load when debounced search or page changes
+  useEffect(() => {
+    // When search changes, always reset to page 1
+    if (debouncedSearch) {
+      setCurrentPage(1);
+      loadData(1, debouncedSearch);
+    } else {
+      loadData(currentPage, "");
+    }
+  }, [debouncedSearch, currentPage, loadData]);
+
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+  // Next page handler — fetches next 10 directly from database
+  const handleNextPage = () => {
+    if (currentPage < totalPages && !loading) {
+      setCurrentPage((prev) => prev + 1);
+    }
+  };
+
+  // Previous page handler — fetches previous 10 directly from database
+  const handlePrevPage = () => {
+    if (currentPage > 1 && !loading) {
+      setCurrentPage((prev) => prev - 1);
+    }
+  };
+
+  // Jump to first page
+  const handleFirstPage = () => {
+    if (currentPage !== 1 && !loading) {
+      cursorsMap.current = { 1: null };
+      setCurrentPage(1);
+    }
+  };
+
+  // Refresh current view from database
+  const handleRefresh = () => {
+    if (debouncedSearch) {
+      loadData(1, debouncedSearch);
+    } else {
+      cursorsMap.current = { 1: null };
+      setCurrentPage(1);
+      loadData(1, "");
+    }
+  };
+
+  // Handle clear search
+  const handleClearSearch = () => {
+    setSearch("");
+    setDebouncedSearch("");
+    cursorsMap.current = { 1: null };
+    setCurrentPage(1);
+  };
 
   return (
-    <div className="px-5 pt-5 pb-24 w-full relative">
+    <div className="p-4 sm:p-6 space-y-6 w-full">
       {/* Header */}
-      <div className="flex lg:hidden items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Spare Will" className="h-6 w-auto" />
-          <span className="font-bold text-[var(--dark)] text-lg tracking-tight">Spare Will</span>
-        </div>
-
-      </div>
-
-      {/* Title */}
-      <div className="mb-5">
-        <h1 className="text-[22px] font-bold text-[var(--dark)] tracking-tight">Customers</h1>
-        <p className="text-[#64748b] text-[13px] mt-0.5">Manage and search customer records.</p>
-      </div>
-
-      {/* Search */}
-      <div className="relative mb-6">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8]" />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search customers..."
-          className="w-full pl-10 pr-10 py-3 rounded-2xl border border-[var(--border)] bg-white text-[13px] text-[var(--dark)] focus:outline-none focus:ring-2 focus:ring-[var(--orange)] focus:border-transparent transition-all shadow-sm"
-        />
-        <button className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[var(--dark)]">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
-        </button>
-      </div>
-
-      {/* List */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-2 border-[var(--orange)] border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-[var(--border)] py-16 text-center shadow-sm">
-          <Users className="w-10 h-10 mx-auto mb-3 text-gray-200" />
-          <p className="font-semibold text-[var(--dark)] text-sm">No customers found</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filtered.map(c => (
-            <div
-              key={c.id}
-              onClick={() => navigate('customer-detail', c.id)}
-              className="bg-white rounded-3xl border border-[var(--border)] p-5 hover:shadow-md transition-all cursor-pointer shadow-sm flex flex-col gap-4"
-            >
-              {/* Top Row: Avatar & Name */}
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                    <span className="text-[var(--dark)] font-bold text-[15px]">
-                      {c.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-bold text-[var(--dark)] text-[15px]">{c.name}</p>
-                    <p className="text-[11px] text-[#94a3b8] font-medium tracking-wide">ID: {c.id.substring(0, 8).toUpperCase()}</p>
-                  </div>
-                </div>
-                <button className="text-[#94a3b8] hover:text-[var(--dark)] p-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-                </button>
-              </div>
-
-              {/* Bottom Row: Phone & Inquiries */}
-              <div className="flex items-center gap-4 text-[12px] font-medium text-[#64748b] ml-[58px]">
-                <div className="flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>{c.phone}</span>
-                </div>
-                {(c as any).inquiryCount > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                    <span>{(c as any).inquiryCount} Inquiries</span>
-                  </div>
-                )}
-              </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center shrink-0">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-xl font-bold text-gray-900">Customers</h1>
+              <span className="px-2.5 py-0.5 text-xs font-semibold bg-orange-50 text-orange-600 rounded-full border border-orange-100">
+                Total: {totalCount}
+              </span>
             </div>
-          ))}
+            <p className="text-xs text-gray-500">
+              Manage registered customers, view contact information and inquiry
+              records
+            </p>
+          </div>
         </div>
-      )}
 
+        {/* Refresh Button */}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            title="Refresh database records"
+            className="px-3 py-2 bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+          >
+            <RotateCw
+              className={`w-3.5 h-3.5 ${loading ? "animate-spin text-orange-500" : ""}`}
+            />
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Database Search Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="relative flex-1 w-full md:max-w-md">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search directly on database by name, email, or phone..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-9 py-2 text-sm bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+          />
+          {search && (
+            <button
+              onClick={handleClearSearch}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Page status feedback */}
+        <div className="text-xs text-gray-500 font-medium">
+          {debouncedSearch ? (
+            <span>
+              Database search for "<strong>{debouncedSearch}</strong>": Found{" "}
+              {totalCount} matching {totalCount === 1 ? "customer" : "customers"}
+            </span>
+          ) : totalPages > 1 ? (
+            <span>
+              Page {currentPage} of {totalPages} (10 per page)
+            </span>
+          ) : (
+            <span>Showing {customers.length} customer records</span>
+          )}
+        </div>
+      </div>
+
+      {/* Customer Table Card */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="py-20 flex flex-col items-center justify-center text-gray-400">
+            <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-sm">Fetching customers from database...</p>
+          </div>
+        ) : customers.length === 0 ? (
+          <div className="py-20 text-center text-gray-400">
+            <Users className="w-12 h-12 mx-auto mb-3 opacity-30 text-gray-500" />
+            <h3 className="text-base font-semibold text-gray-700">
+              No Customers Found
+            </h3>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto mt-1 mb-4">
+              {debouncedSearch
+                ? `No customer in the database matches "${debouncedSearch}".`
+                : "Customer records will automatically appear as users register and log in."}
+            </p>
+            {debouncedSearch && (
+              <button
+                onClick={handleClearSearch}
+                className="px-4 py-2 bg-orange-500 text-white text-xs font-semibold rounded-xl hover:bg-orange-600 transition-all cursor-pointer"
+              >
+                Clear Search
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50/75 border-b border-gray-100 text-gray-500 text-xs uppercase font-medium">
+                <tr>
+                  <th className="py-3.5 px-4">Customer</th>
+                  <th className="py-3.5 px-4">Contact Info</th>
+                  <th className="py-3.5 px-4">Joined / Created</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {customers.map((c) => (
+                  <tr
+                    key={c.id}
+                    onClick={() => navigate("customer-detail", c.id)}
+                    className="hover:bg-gray-50/60 transition-colors cursor-pointer group"
+                  >
+                    {/* Customer Info (Avatar, Name, Auth UID) */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        {c.avatar ? (
+                          <img
+                            src={c.avatar}
+                            alt={c.name}
+                            className="w-9 h-9 rounded-full object-cover bg-gray-100 border border-gray-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-orange-50 text-orange-600 font-bold text-xs flex items-center justify-center border border-orange-100 shrink-0">
+                            {c.name
+                              ? c.name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .slice(0, 2)
+                                  .toUpperCase()
+                              : "CU"}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors truncate">
+                            {c.name || "Unnamed Customer"}
+                          </p>
+                          <p className="text-[11px] text-gray-400 font-mono">
+                            UID: {c.id ? `${c.id.substring(0, 10)}...` : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Contact Details */}
+                    <td className="py-3.5 px-4 text-xs">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-gray-700">
+                          <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span className="truncate max-w-[200px]">
+                            {c.email || "—"}
+                          </span>
+                        </div>
+                        {c.phone ? (
+                          <div className="flex items-center gap-1.5 text-gray-600">
+                            <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span>{c.phone}</span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-gray-400">
+                            No phone registered
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Joined Date (Timestamp) */}
+                    <td className="py-3.5 px-4 text-xs text-gray-500 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                        <span>{formatInquiryDate(c.createdAt)}</span>
+                      </div>
+                    </td>
+
+                    {/* Action Buttons */}
+                    <td
+                      className="py-3.5 px-4 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-1.5">
+                        {c.phone && (
+                          <>
+                            <a
+                              href={`https://wa.me/${c.phone.replace(/[^0-9]/g, "")}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Chat on WhatsApp"
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </a>
+                            <a
+                              href={`tel:${c.phone}`}
+                              title="Call Customer"
+                              className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Phone className="w-4 h-4" />
+                            </a>
+                          </>
+                        )}
+                        <button
+                          onClick={() => navigate("customer-detail", c.id)}
+                          className="px-2.5 py-1 text-xs font-semibold text-gray-600 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>View</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Direct Database Pagination Bar */}
+            {!debouncedSearch && totalPages > 1 && (
+              <div className="px-4 py-3.5 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-gray-50/50">
+                <span className="text-xs text-gray-500">
+                  Showing 10 customers per page from database
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {/* Jump to Page 1 */}
+                  <button
+                    onClick={handleFirstPage}
+                    disabled={currentPage === 1 || loading}
+                    title="Direct Jump to Page 1"
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      currentPage === 1 || loading
+                        ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                        : "bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-600 border-gray-200 hover:border-orange-200 shadow-2xs cursor-pointer"
+                    }`}
+                  >
+                    « Page 1
+                  </button>
+
+                  {/* Previous Page */}
+                  <button
+                    onClick={handlePrevPage}
+                    disabled={currentPage === 1 || loading}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      currentPage === 1 || loading
+                        ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                        : "bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-600 border-gray-200 hover:border-orange-200 shadow-2xs cursor-pointer"
+                    }`}
+                  >
+                    ‹ Previous
+                  </button>
+
+                  {/* Current Page Indicator */}
+                  <span className="px-3 py-1.5 text-xs font-semibold bg-orange-500 text-white rounded-lg shadow-2xs">
+                    Page {currentPage} of {totalPages}
+                  </span>
+
+                  {/* Next Page */}
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage >= totalPages || loading}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      currentPage >= totalPages || loading
+                        ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                        : "bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-600 border-gray-200 hover:border-orange-200 shadow-2xs cursor-pointer"
+                    }`}
+                  >
+                    Next ›
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -3,11 +3,22 @@ import { FileText, Clock, Send, CheckCircle, ChevronRight, Package } from 'lucid
 import { useAdmin } from '../App';
 import StatusBadge from '../components/StatusBadge';
 
-function getRelativeTime(dateStr?: string): string {
-  if (!dateStr) return '';
+function getRelativeTime(timestamp?: any): string {
+  if (!timestamp) return '';
   try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return '';
+    let date: Date | null = null;
+    if (typeof timestamp?.toDate === 'function') {
+      date = timestamp.toDate();
+    } else if (timestamp?.seconds) {
+      date = new Date(timestamp.seconds * 1000);
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+      const parsed = new Date(timestamp);
+      if (!isNaN(parsed.getTime())) date = parsed;
+    }
+    if (!date) return '';
+
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffSec = Math.floor(diffMs / 1000);

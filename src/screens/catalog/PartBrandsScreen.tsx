@@ -4,16 +4,26 @@ import { Plus, Edit2, Trash2, Search, Tag, ShieldCheck } from "lucide-react";
 import { useAdmin } from "../../App";
 import { PartBrand } from "../../models";
 import {
-  getPartBrands,
+  getPaginatedPartBrands,
   savePartBrand,
   deletePartBrand,
 } from "../../services/catalogService";
+import { DocumentSnapshot } from "firebase/firestore";
 
 export default function PartBrandsScreen() {
   const { showToast } = useAdmin();
   const [brands, setBrands] = useState<PartBrand[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Search & Debounce
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Pagination state (10 per page, cursor-based)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [firstDoc, setFirstDoc] = useState<DocumentSnapshot | null>(null);
+  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
 
   // Modal
   const [showModal, setShowModal] = useState(false);
@@ -28,11 +38,41 @@ export default function PartBrandsScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchBrands = async () => {
+  // Debounce search input by 350ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch paginated brands from Firestore
+  const fetchPage = async (
+    direction: "first" | "next" | "prev" = "first",
+    targetPage = 1,
+    cursorOverride?: DocumentSnapshot | null,
+  ) => {
     try {
       setLoading(true);
-      const data = await getPartBrands();
-      setBrands(data);
+      let cursor = cursorOverride;
+      if (cursor === undefined) {
+        if (direction === "next") cursor = lastDoc;
+        else if (direction === "prev") cursor = firstDoc;
+        else cursor = null;
+      }
+
+      const res = await getPaginatedPartBrands({
+        search: debouncedSearch,
+        pageSize: 10,
+        cursorDoc: cursor,
+        direction,
+      });
+
+      setBrands(res.items);
+      setTotalCount(res.totalCount);
+      setFirstDoc(res.firstDoc);
+      setLastDoc(res.lastDoc);
+      setCurrentPage(targetPage);
     } catch (err: any) {
       showToast(err.message || "Error loading part brands", "error");
     } finally {
@@ -40,9 +80,29 @@ export default function PartBrandsScreen() {
     }
   };
 
+  // Re-fetch from page 1 whenever debounced search changes
   useEffect(() => {
-    fetchBrands();
-  }, []);
+    fetchPage("first", 1, null);
+  }, [debouncedSearch]);
+
+  const totalPages = Math.ceil(totalCount / 10) || 1;
+
+  // Pagination navigation rules:
+  // From page N, only go to N-1 (Prev), N+1 (Next), or 1 (Reset)
+  const handleFirstPage = () => {
+    if (currentPage === 1 || loading) return;
+    fetchPage("first", 1, null);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage <= 1 || loading || !firstDoc) return;
+    fetchPage("prev", currentPage - 1, firstDoc);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage >= totalPages || loading || !lastDoc) return;
+    fetchPage("next", currentPage + 1, lastDoc);
+  };
 
   const handleOpenAdd = () => {
     setEditingBrand(null);
@@ -101,7 +161,7 @@ export default function PartBrandsScreen() {
         "success",
       );
       setShowModal(false);
-      fetchBrands();
+      fetchPage("first", 1, null);
     } catch (err: any) {
       showToast(err.message || "Error saving brand", "error");
     } finally {
@@ -115,19 +175,11 @@ export default function PartBrandsScreen() {
       await deletePartBrand(deletingId);
       showToast("Part brand deleted", "info");
       setDeletingId(null);
-      fetchBrands();
+      fetchPage("first", 1, null);
     } catch (err: any) {
       showToast(err.message || "Failed to delete part brand", "error");
     }
   };
-
-  const filtered = brands.filter(
-    (b) =>
-      b.name.toLowerCase().includes(search.toLowerCase()) ||
-      b.slug.toLowerCase().includes(search.toLowerCase()) ||
-      (b.description &&
-        b.description.toLowerCase().includes(search.toLowerCase())),
-  );
 
   return (
     <div className="p-6 space-y-6 w-full">
@@ -166,7 +218,7 @@ export default function PartBrandsScreen() {
           />
         </div>
         <div className="text-xs font-medium text-gray-500">
-          Showing {filtered.length} of {brands.length} brands
+          Showing {brands.length} of {totalCount} brands
         </div>
       </div>
 
@@ -177,7 +229,7 @@ export default function PartBrandsScreen() {
             <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mb-3" />
             <p className="text-sm">Loading part brands...</p>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : brands.length === 0 ? (
           <div className="py-20 text-center text-gray-400">
             <Tag className="w-12 h-12 mx-auto mb-3 opacity-30 text-gray-500" />
             <h3 className="text-base font-semibold text-gray-700">
@@ -207,22 +259,18 @@ export default function PartBrandsScreen() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((b) => (
+                {brands.map((b) => (
                   <tr
                     key={b.id}
                     className="hover:bg-gray-50/60 transition-colors"
                   >
                     <td className="py-3.5 px-4 font-semibold text-gray-900 flex items-center gap-3">
-                      {b.logo ? (
+                      {b.logo && (
                         <img
                           src={b.logo}
                           alt={b.name}
-                          className="w-8 h-8 rounded-lg object-contain bg-gray-50 border border-gray-200 p-1"
+                          className="w-8 h-8 rounded-lg object-contain bg-gray-50 border border-gray-200 p-1 shrink-0"
                         />
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 font-bold flex items-center justify-center text-xs">
-                          {b.name.charAt(0)}
-                        </div>
                       )}
                       <span>{b.name}</span>
                     </td>
@@ -265,6 +313,74 @@ export default function PartBrandsScreen() {
                 ))}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-gray-500 font-medium">
+                Showing{" "}
+                <span className="font-semibold text-gray-800">
+                  {totalCount === 0 ? 0 : (currentPage - 1) * 10 + 1}
+                </span>{" "}
+                to{" "}
+                <span className="font-semibold text-gray-800">
+                  {Math.min(currentPage * 10, totalCount)}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-gray-800">
+                  {totalCount}
+                </span>{" "}
+                brands
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Reset / Direct Jump to Page 1 */}
+                <button
+                  onClick={handleFirstPage}
+                  disabled={currentPage === 1 || loading}
+                  title="Direct Jump to Page 1"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    currentPage === 1 || loading
+                      ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                      : "bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-600 border-gray-200 hover:border-orange-200 shadow-xs cursor-pointer"
+                  }`}
+                >
+                  « Page 1
+                </button>
+
+                {/* Previous Page (from first document) */}
+                <button
+                  onClick={handlePrevPage}
+                  disabled={currentPage <= 1 || loading || !firstDoc}
+                  title="Previous Page (loads previous 10)"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    currentPage <= 1 || loading || !firstDoc
+                      ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                      : "bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-600 border-gray-200 hover:border-orange-200 shadow-xs cursor-pointer"
+                  }`}
+                >
+                  ‹ Prev
+                </button>
+
+                {/* Current Page Badge */}
+                <div className="px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg shadow-xs select-none">
+                  Page {currentPage} of {totalPages}
+                </div>
+
+                {/* Next Page (from last document) */}
+                <button
+                  onClick={handleNextPage}
+                  disabled={currentPage >= totalPages || loading || !lastDoc}
+                  title="Next Page (loads next 10)"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    currentPage >= totalPages || loading || !lastDoc
+                      ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                      : "bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-600 border-gray-200 hover:border-orange-200 shadow-xs cursor-pointer"
+                  }`}
+                >
+                  Next ›
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
